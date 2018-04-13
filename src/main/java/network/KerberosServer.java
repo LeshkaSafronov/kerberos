@@ -16,6 +16,7 @@ import java.io.*;
 import java.net.InetSocketAddress;
 import java.sql.*;
 import java.time.Instant;
+import java.util.Arrays;
 
 import static org.apache.commons.text.CharacterPredicates.DIGITS;
 import static org.apache.commons.text.CharacterPredicates.LETTERS;
@@ -32,39 +33,45 @@ public class KerberosServer {
 
     static class AuthHandler implements HttpHandler {
 
-        private byte[] getEncryptedTGTResponse(String clientId) throws SQLException, IOException {
+        private String encodeJson(JSONObject jsonObject, long key) throws IOException {
+            Encryptor encryptor = new Encryptor(key);
+
+            try (ByteArrayInputStream byteInputStream = new ByteArrayInputStream(jsonObject.toJSONString().getBytes());
+                 ByteArrayOutputStream byteOutputStream = new ByteArrayOutputStream()) {
+                while (true) {
+                    byte[] buffer = new byte[8];
+                    int status = byteInputStream.read(buffer);
+                    if (status == -1) {
+                        break;
+                    }
+
+                    long encodedChunk = encryptor.encrypt(Utils.bytesToLong(buffer));
+                    byteOutputStream.write(Utils.longToBytes(encodedChunk));
+                }
+                return byteOutputStream.toString();
+            }
+        }
+
+        private byte[] getEncryptedTGTResponse(String clientId, String clientKey) throws SQLException, IOException {
             RandomStringGenerator generator = new RandomStringGenerator.Builder()
                     .withinRange('0', 'z')
                     .filteredBy(LETTERS, DIGITS)
                     .build();
+
+            String clientTGSKey = generator.generate(7);
 
             JSONObject jsonTGTObject = new JSONObject();
             jsonTGTObject.put("client_id", clientId);
             jsonTGTObject.put("tgt_host", Settings.TGT_HOST);
             jsonTGTObject.put("timestamp", Instant.now().getEpochSecond());
             jsonTGTObject.put("ticket_estimate", Settings.TICKET_ESTIMATE_SECONDS);
-            jsonTGTObject.put("client_tgs_key", generator.generate(7));
-
-            Encryptor encryptor = new Encryptor(Utils.stringToLong(Settings.AS_TGS_KEY));
-
-            ByteArrayInputStream byteStream = new ByteArrayInputStream(jsonTGTObject.toJSONString().getBytes());
-            ByteArrayOutputStream encodedTGTOutputStream = new ByteArrayOutputStream();
-
-            while (true) {
-                byte[] buffer = new byte[8];
-                int status = byteStream.read(buffer);
-                if (status == -1) {
-                    break;
-                }
-
-                long encodedChunk = encryptor.encrypt(Utils.bytesToLong(buffer));
-                encodedTGTOutputStream.write(Utils.longToBytes(encodedChunk));
-            }
+            jsonTGTObject.put("client_tgs_key", clientTGSKey);
 
             JSONObject jsonObject = new JSONObject();
-            jsonObject.put("tgt_object", encodedTGTOutputStream.toByteArray());
-            return jsonObject.toJSONString().getBytes();
+            jsonObject.put("tgt_object", encodeJson(jsonTGTObject, Utils.stringToLong(Settings.AS_TGS_KEY)));
+            jsonObject.put("client_tgs_key", clientTGSKey);
 
+            return encodeJson(jsonObject, Utils.stringToLong(clientKey)).getBytes();
         }
 
         @Override
@@ -90,7 +97,9 @@ public class KerberosServer {
                 ResultSet resultSet = preparedStatement.executeQuery();
 
                 if (resultSet.next()) {
-                    responseBytes = getEncryptedTGTResponse(clientId);// jsonObject.toJSONString().getBytes();
+                    String clientKey = resultSet.getString(2);
+                    responseBytes = getEncryptedTGTResponse(clientId, clientKey);
+                    System.out.println(Arrays.toString(responseBytes));
                     statusCode = 200;
                 } else {
                     JSONObject errorJson = new JSONObject();
@@ -100,7 +109,7 @@ public class KerberosServer {
                 }
 
                 Headers headers = exchange.getResponseHeaders();
-                headers.add("Content-Type", "application/json");
+                headers.add("Content-Type", "application/plain");
 
                 exchange.sendResponseHeaders(statusCode, responseBytes.length);
                 outputStream.write(responseBytes);
