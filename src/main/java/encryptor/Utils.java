@@ -1,10 +1,76 @@
 package encryptor;
 
+import com.sun.xml.internal.messaging.saaj.util.ByteOutputStream;
+import org.apache.http.HttpResponse;
+import org.json.simple.JSONObject;
+import org.json.simple.parser.JSONParser;
+import org.json.simple.parser.ParseException;
+
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.Arrays;
 
 public class Utils {
+
+    public static byte[] readData(HttpResponse response) throws IOException {
+        try(InputStream inputStream = response.getEntity().getContent();
+            ByteOutputStream byteOutputStream = new ByteOutputStream()) {
+            while (true) {
+                byte[] buffer = new byte[8];
+                int status = inputStream.read(buffer);
+                if (status == -1) {
+                    break;
+                }
+                byteOutputStream.write(buffer);
+            }
+            return byteOutputStream.getBytes();
+        }
+    }
+
+    public static JSONObject decryptJson(byte[] encryptedData, long key) throws IOException, ParseException {
+        try (ByteArrayInputStream byteInputStream = new ByteArrayInputStream(encryptedData);
+             ByteOutputStream byteOutputStream = new ByteOutputStream()) {
+            Decryptor decryptor = new Decryptor(key);
+            while (true) {
+                byte[] buffer = new byte[8];
+                int status = byteInputStream.read(buffer);
+                if (status == -1) {
+                    break;
+                }
+                byteOutputStream.write(Utils.longToBytes(decryptor.decrypt(Utils.bytesToLong(buffer))));
+            }
+            byte[] outputBuffer = Arrays.copyOf(byteOutputStream.getBytes(), byteOutputStream.getCount());
+
+            JSONParser jsonParser = new JSONParser();
+
+            System.out.println(new String(outputBuffer).trim());
+            return (JSONObject) jsonParser.parse(new String(outputBuffer).trim());
+        }
+    }
+
+    public static byte[] encryptJson(JSONObject jsonObject, long key) throws IOException {
+        Encryptor encryptor = new Encryptor(key);
+
+        try (ByteArrayInputStream byteInputStream = new ByteArrayInputStream(jsonObject.toJSONString().getBytes());
+             ByteArrayOutputStream byteOutputStream = new ByteArrayOutputStream()) {
+
+            while (true) {
+                byte[] buffer = new byte[8];
+                int status = byteInputStream.read(buffer);
+                if (status == -1) {
+                    break;
+                }
+
+                long encodedChunk = encryptor.encrypt(Utils.bytesToLong(buffer));
+                byteOutputStream.write(Utils.longToBytes(encodedChunk));
+            }
+            return byteOutputStream.toByteArray();
+        }
+    }
 
     public static long stringToLong(String key) {
         byte[] buffer = Arrays.copyOf(key.getBytes(), 8);
