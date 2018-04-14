@@ -6,7 +6,7 @@ import com.sun.net.httpserver.HttpHandler;
 import com.sun.net.httpserver.HttpServer;
 import encryptor.Encryptor;
 import encryptor.Utils;
-import javafx.util.Pair;
+import org.apache.commons.codec.binary.Base64;
 import org.apache.commons.text.RandomStringGenerator;
 import org.json.simple.JSONObject;
 import org.json.simple.parser.JSONParser;
@@ -16,7 +16,6 @@ import java.io.*;
 import java.net.InetSocketAddress;
 import java.sql.*;
 import java.time.Instant;
-import java.util.Arrays;
 
 import static org.apache.commons.text.CharacterPredicates.DIGITS;
 import static org.apache.commons.text.CharacterPredicates.LETTERS;
@@ -33,11 +32,12 @@ public class KerberosServer {
 
     static class AuthHandler implements HttpHandler {
 
-        private String encodeJson(JSONObject jsonObject, long key) throws IOException {
+        private String encryptJson(JSONObject jsonObject, long key) throws IOException {
             Encryptor encryptor = new Encryptor(key);
 
             try (ByteArrayInputStream byteInputStream = new ByteArrayInputStream(jsonObject.toJSONString().getBytes());
                  ByteArrayOutputStream byteOutputStream = new ByteArrayOutputStream()) {
+
                 while (true) {
                     byte[] buffer = new byte[8];
                     int status = byteInputStream.read(buffer);
@@ -48,11 +48,22 @@ public class KerberosServer {
                     long encodedChunk = encryptor.encrypt(Utils.bytesToLong(buffer));
                     byteOutputStream.write(Utils.longToBytes(encodedChunk));
                 }
-                return byteOutputStream.toString();
+                return Base64.encodeBase64String(byteOutputStream.toByteArray());
             }
         }
 
-        private byte[] getEncryptedTGTResponse(String clientId, String clientKey) throws SQLException, IOException {
+        private void writeError(HttpExchange exchange, String message, int statusCode) throws IOException {
+            try(OutputStream outputStream = exchange.getResponseBody()) {
+                Headers headers = exchange.getResponseHeaders();
+                headers.add("Content-Type", "application/plain");
+
+                byte[] responseBytes = message.getBytes();
+                exchange.sendResponseHeaders(statusCode, responseBytes.length);
+                outputStream.write(responseBytes);
+            }
+        }
+
+        private String getEncryptedTGTJsonString(String clientId, String clientKey) throws IOException {
             RandomStringGenerator generator = new RandomStringGenerator.Builder()
                     .withinRange('0', 'z')
                     .filteredBy(LETTERS, DIGITS)
@@ -68,14 +79,19 @@ public class KerberosServer {
             jsonTGTObject.put("client_tgs_key", clientTGSKey);
 
             JSONObject jsonObject = new JSONObject();
-            jsonObject.put("tgt_object", encodeJson(jsonTGTObject, Utils.stringToLong(Settings.AS_TGS_KEY)));
+            jsonObject.put("tgt_object", encryptJson(jsonTGTObject, Utils.stringToLong(Settings.AS_TGS_KEY)));
             jsonObject.put("client_tgs_key", clientTGSKey);
 
-            return encodeJson(jsonObject, Utils.stringToLong(clientKey)).getBytes();
+            return encryptJson(jsonObject, Utils.stringToLong(clientKey));
         }
 
         @Override
         public void handle(HttpExchange exchange) throws IOException {
+            if (exchange.getRequestMethod().equals("GET")) {
+                writeError(exchange, "Method GET not allowed", 400);
+                return;
+            }
+
             try(InputStreamReader inputStreamReader = new InputStreamReader(exchange.getRequestBody());
                 OutputStream outputStream = exchange.getResponseBody();
                 Connection connection = DriverManager.getConnection(Settings.DB_HOST,
@@ -98,8 +114,7 @@ public class KerberosServer {
 
                 if (resultSet.next()) {
                     String clientKey = resultSet.getString(2);
-                    responseBytes = getEncryptedTGTResponse(clientId, clientKey);
-                    System.out.println(Arrays.toString(responseBytes));
+                    responseBytes = getEncryptedTGTJsonString(clientId, clientKey).getBytes();
                     statusCode = 200;
                 } else {
                     JSONObject errorJson = new JSONObject();
@@ -115,14 +130,7 @@ public class KerberosServer {
                 outputStream.write(responseBytes);
 
             } catch (ParseException | SQLException e) {
-                try(OutputStream outputStream = exchange.getResponseBody()) {
-                    Headers headers = exchange.getResponseHeaders();
-                    headers.add("Content-Type", "application/plain");
-
-                    byte[] responseBytes = "Internal Server Error".getBytes();
-                    exchange.sendResponseHeaders(500, responseBytes.length);
-                    outputStream.write(responseBytes);
-                }
+                writeError(exchange, "Internal Server Error", 500);
                 e.printStackTrace();
             }
         }
