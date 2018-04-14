@@ -11,10 +11,13 @@ import org.apache.http.entity.BasicHttpEntity;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClientBuilder;
 import org.json.simple.JSONObject;
+import org.json.simple.parser.JSONParser;
+import org.json.simple.parser.ParseException;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.Arrays;
 
 public class HttpClient {
     private static CloseableHttpClient client = HttpClientBuilder.create().build();
@@ -49,7 +52,7 @@ public class HttpClient {
         return client.execute(request);
     }
 
-    private void decryptAuthServerResponse(HttpResponse responseAuthServer) throws IOException {
+    private JSONObject decryptAuthServerResponse(HttpResponse responseAuthServer) throws IOException, ParseException {
         byte[] decodedBytes = Base64.decodeBase64(readData(responseAuthServer));
         try (ByteArrayInputStream byteInputStream = new ByteArrayInputStream(decodedBytes);
              ByteOutputStream byteOutputStream = new ByteOutputStream()) {
@@ -62,7 +65,10 @@ public class HttpClient {
                 }
                 byteOutputStream.write(Utils.longToBytes(decryptor.decrypt(Utils.bytesToLong(buffer))));
             }
-            System.out.println(new String(byteOutputStream.getBytes()));
+            byte[] outputBuffer = Arrays.copyOf(byteOutputStream.getBytes(), byteOutputStream.getCount());
+
+            JSONParser jsonParser = new JSONParser();
+            return (JSONObject) jsonParser.parse(new String(outputBuffer).trim());
         }
     }
 
@@ -74,7 +80,15 @@ public class HttpClient {
             throw new HttpResponseException(responseStatus, new String(readData(responseAuthServer)));
         }
 
-        decryptAuthServerResponse(responseAuthServer);
+        JSONObject jsonAuthObject;
+        try {
+            jsonAuthObject = decryptAuthServerResponse(responseAuthServer);
+        }
+        catch (ParseException e) {
+            throw new HttpResponseException(400, String.format("Cannot parse json string. Reason: %s", e.toString()));
+        }
+
+        System.out.println(jsonAuthObject.toJSONString());
     }
 
     public static void main(String[] args) throws IOException {

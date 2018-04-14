@@ -16,6 +16,7 @@ import java.io.*;
 import java.net.InetSocketAddress;
 import java.sql.*;
 import java.time.Instant;
+import java.util.Arrays;
 
 import static org.apache.commons.text.CharacterPredicates.DIGITS;
 import static org.apache.commons.text.CharacterPredicates.LETTERS;
@@ -63,6 +64,16 @@ public class KerberosServer {
             }
         }
 
+        private JSONObject generateTGTObject(String clientId, String clientTGSKey) {
+            JSONObject jsonTGTObject = new JSONObject();
+            jsonTGTObject.put("client_id", clientId);
+            jsonTGTObject.put("tgt_host", Settings.TGT_HOST);
+            jsonTGTObject.put("timestamp", Instant.now().getEpochSecond());
+            jsonTGTObject.put("ticket_estimate", Settings.TICKET_ESTIMATE_SECONDS);
+            jsonTGTObject.put("client_tgs_key", clientTGSKey);
+            return jsonTGTObject;
+        }
+
         private String getEncryptedTGTJsonString(String clientId, String clientKey) throws IOException {
             RandomStringGenerator generator = new RandomStringGenerator.Builder()
                     .withinRange('0', 'z')
@@ -71,17 +82,10 @@ public class KerberosServer {
 
             String clientTGSKey = generator.generate(7);
 
-            JSONObject jsonTGTObject = new JSONObject();
-            jsonTGTObject.put("client_id", clientId);
-            jsonTGTObject.put("tgt_host", Settings.TGT_HOST);
-            jsonTGTObject.put("timestamp", Instant.now().getEpochSecond());
-            jsonTGTObject.put("ticket_estimate", Settings.TICKET_ESTIMATE_SECONDS);
-            jsonTGTObject.put("client_tgs_key", clientTGSKey);
-
             JSONObject jsonObject = new JSONObject();
-            jsonObject.put("tgt_object", encryptJson(jsonTGTObject, Utils.stringToLong(Settings.AS_TGS_KEY)));
+            jsonObject.put("tgt_object", encryptJson(generateTGTObject(clientId, clientTGSKey),
+                                                     Utils.stringToLong(Settings.AS_TGS_KEY)));
             jsonObject.put("client_tgs_key", clientTGSKey);
-
             return encryptJson(jsonObject, Utils.stringToLong(clientKey));
         }
 
@@ -115,6 +119,7 @@ public class KerberosServer {
                 if (resultSet.next()) {
                     String clientKey = resultSet.getString(2);
                     responseBytes = getEncryptedTGTJsonString(clientId, clientKey).getBytes();
+                    System.out.println(Arrays.toString(responseBytes));
                     statusCode = 200;
                 } else {
                     JSONObject errorJson = new JSONObject();
