@@ -9,6 +9,7 @@ public class KerberosServer {
         HttpServer server = HttpServer.create(new InetSocketAddress(8080), 10);
 
         server.createContext("/auth", new AuthServerHandler());
+        server.createContext("/tgs", new TGSServerHandler());
 
         server.setExecutor(null);
         server.start();

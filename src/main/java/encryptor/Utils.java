@@ -1,6 +1,7 @@
 package encryptor;
 
 import com.sun.xml.internal.messaging.saaj.util.ByteOutputStream;
+import org.apache.commons.text.RandomStringGenerator;
 import org.apache.http.HttpResponse;
 import org.json.simple.JSONObject;
 import org.json.simple.parser.JSONParser;
@@ -14,7 +15,15 @@ import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.Arrays;
 
+import static org.apache.commons.text.CharacterPredicates.DIGITS;
+import static org.apache.commons.text.CharacterPredicates.LETTERS;
+
 public class Utils {
+
+    public static RandomStringGenerator GENERATOR = new RandomStringGenerator.Builder()
+                                                            .withinRange('0', 'z')
+                                                            .filteredBy(LETTERS, DIGITS)
+                                                            .build();
 
     public static byte[] readData(HttpResponse response) throws IOException {
         try(InputStream inputStream = response.getEntity().getContent();

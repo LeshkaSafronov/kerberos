@@ -55,10 +55,16 @@ public class HttpClient {
 
         System.out.println("clientTGSKey --> " + clientTGSKey);
         JSONObject jsonObject = new JSONObject();
-        jsonObject.put("auth_block", encryptJson(generateAuthBlockJson(), Utils.stringToLong(clientTGSKey)));
+        jsonObject.put("auth_block",
+                            Base64.encodeBase64String(
+                                    encryptJson(
+                                        generateAuthBlockJson(),
+                                        Utils.stringToLong(clientTGSKey)
+                                    )
+                            )
+        );
         jsonObject.put("tgt_object", jsonAuthObject.get("tgt_object"));
         jsonObject.put("ss_host", Settings.SS_HOST);
-
         return sendRequest(String.format("http://%s", Settings.TGS_HOST), jsonObject);
     }
 

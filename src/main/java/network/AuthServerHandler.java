@@ -17,22 +17,14 @@ import java.sql.*;
 import java.time.Instant;
 import java.util.Arrays;
 
+import static encryptor.Utils.GENERATOR;
 import static encryptor.Utils.encryptJson;
 import static encryptor.Utils.stringToLong;
 import static org.apache.commons.text.CharacterPredicates.DIGITS;
 import static org.apache.commons.text.CharacterPredicates.LETTERS;
+import static network.Utils.*;
 
 public class AuthServerHandler implements HttpHandler {
-    private void writeError(HttpExchange exchange, String message, int statusCode) throws IOException {
-        try(OutputStream outputStream = exchange.getResponseBody()) {
-            Headers headers = exchange.getResponseHeaders();
-            headers.add("Content-Type", "application/plain");
-
-            byte[] responseBytes = Base64.encodeBase64(message.getBytes());
-            exchange.sendResponseHeaders(statusCode, responseBytes.length);
-            outputStream.write(responseBytes);
-        }
-    }
 
     private JSONObject generateTGTObject(String clientId, String clientTGSKey) {
         JSONObject jsonTGTObject = new JSONObject();
@@ -45,12 +37,7 @@ public class AuthServerHandler implements HttpHandler {
     }
 
     private byte[] getEncryptedTGTJsonString(String clientId, String clientKey) throws IOException {
-        RandomStringGenerator generator = new RandomStringGenerator.Builder()
-                .withinRange('0', 'z')
-                .filteredBy(LETTERS, DIGITS)
-                .build();
-
-        String clientTGSKey = generator.generate(7);
+        String clientTGSKey = GENERATOR.generate(7);
 
         JSONObject jsonObject = new JSONObject();
         jsonObject.put("tgt_object",
