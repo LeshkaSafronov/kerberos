@@ -13,7 +13,6 @@ import org.json.simple.parser.ParseException;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
-import java.util.Arrays;
 
 import static encryptor.Utils.*;
 import static network.Utils.writeError;
@@ -49,20 +48,15 @@ public class SSServerHandler implements HttpHandler {
             OutputStream outputStream = exchange.getResponseBody()) {
 
             byte[] requestData = Base64.decodeBase64(IOUtils.toByteArray(inputStreamReader));
-            System.out.println(Arrays.toString(requestData));
             JSONParser jsonParser = new JSONParser();
             JSONObject jsonObject = (JSONObject) jsonParser.parse(new String(requestData));
-
-            System.out.println(jsonObject.toJSONString());
 
             JSONObject tgsObject = decryptJson(
                     Base64.decodeBase64(jsonObject.get("tgs_object").toString()),
                     stringToLong(Settings.TGS_SS_KEY)
             );
-            System.out.println(tgsObject.toJSONString());
 
             clientSSKey = tgsObject.get("client_ss_key").toString();
-            System.out.println("Private SS key --> " + clientSSKey);
 
             JSONObject authBlock = decryptJson(
                     Base64.decodeBase64(jsonObject.get("auth_block").toString()),
@@ -72,6 +66,8 @@ public class SSServerHandler implements HttpHandler {
             if (!checkRequest(tgsObject, authBlock)) {
                 throw new HttpException("Permission denied");
             }
+
+            System.out.println("Private SS Key --> " + clientSSKey);
 
             JSONObject ssResponseObject = generateSSResponseObject(authBlock);
             byte[] responseB64Data = Base64.encodeBase64(
@@ -92,8 +88,6 @@ public class SSServerHandler implements HttpHandler {
         } catch (HttpException e) {
             writeError(exchange, e.toString(), 400);
             e.printStackTrace();
-        } catch (IOException e) {
-            System.out.println("I AM HERE");
         }
     }
 }

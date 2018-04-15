@@ -14,7 +14,6 @@ import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.sql.*;
 import java.time.Instant;
-import java.util.Arrays;
 
 import static encryptor.Utils.*;
 import static network.Utils.writeError;
@@ -85,11 +84,7 @@ public class AuthServerHandler implements HttpHandler {
                 responseBytes = errorJson.toJSONString().getBytes();
                 statusCode = 400;
             }
-
-            System.out.println(Arrays.toString(responseBytes));
             byte[] responseB64Data = Base64.encodeBase64(responseBytes);
-            System.out.println(Arrays.toString(responseB64Data));
-
 
             Headers headers = exchange.getResponseHeaders();
             headers.add("Content-Type", "text/plain");

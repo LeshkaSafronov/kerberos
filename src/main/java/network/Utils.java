@@ -10,7 +10,6 @@ import java.io.OutputStream;
 public class Utils {
     public static void writeError(HttpExchange exchange, String message, int statusCode) throws IOException {
         try(OutputStream outputStream = exchange.getResponseBody()) {
-            System.out.println("writeError!!!");
             Headers headers = exchange.getResponseHeaders();
             headers.add("Content-Type", "application/plain");
 
