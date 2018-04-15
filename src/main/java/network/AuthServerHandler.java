@@ -5,7 +5,6 @@ import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 import org.apache.commons.codec.binary.Base64;
 import org.apache.commons.io.IOUtils;
-import org.apache.commons.text.RandomStringGenerator;
 import org.json.simple.JSONObject;
 import org.json.simple.parser.JSONParser;
 import org.json.simple.parser.ParseException;
@@ -17,12 +16,8 @@ import java.sql.*;
 import java.time.Instant;
 import java.util.Arrays;
 
-import static encryptor.Utils.GENERATOR;
-import static encryptor.Utils.encryptJson;
-import static encryptor.Utils.stringToLong;
-import static org.apache.commons.text.CharacterPredicates.DIGITS;
-import static org.apache.commons.text.CharacterPredicates.LETTERS;
-import static network.Utils.*;
+import static encryptor.Utils.*;
+import static network.Utils.writeError;
 
 public class AuthServerHandler implements HttpHandler {
 

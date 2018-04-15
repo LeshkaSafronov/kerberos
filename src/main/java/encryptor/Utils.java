@@ -55,8 +55,6 @@ public class Utils {
             byte[] outputBuffer = Arrays.copyOf(byteOutputStream.getBytes(), byteOutputStream.getCount());
 
             JSONParser jsonParser = new JSONParser();
-
-            System.out.println(new String(outputBuffer).trim());
             return (JSONObject) jsonParser.parse(new String(outputBuffer).trim());
         }
     }

@@ -13,39 +13,38 @@ import org.json.simple.parser.ParseException;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
-import java.sql.Connection;
-import java.sql.DriverManager;
-import java.sql.SQLException;
 import java.time.Instant;
 
 import static encryptor.Utils.*;
 import static network.Utils.writeError;
 
 public class TGSServerHandler implements HttpHandler {
-    private JSONObject generateTGSObject(String clientId, String clientSSKey) {
+    private JSONObject generateTGSObject(String clientId, String clientSSKey, String ticketEstimate) {
         JSONObject jsonObject = new JSONObject();
         jsonObject.put("client_id", clientId);
         jsonObject.put("ss_host", Settings.SS_HOST);
         jsonObject.put("timestamp", Instant.now().getEpochSecond());
         jsonObject.put("client_ss_key", clientSSKey);
+        jsonObject.put("ticket_estimate", ticketEstimate);
         return jsonObject;
     }
 
     private JSONObject generateTGSResponseObject(JSONObject tgtObject) throws IOException {
         String clientId = tgtObject.get("client_id").toString();
         String clientSSKey = GENERATOR.generate(7);
+        String ticketEstimate = tgtObject.get("ticket_estimate").toString();
 
         JSONObject tgsResponseObject = new JSONObject();
         tgsResponseObject.put(
                 "tgs_object",
                 Base64.encodeBase64String(
                         encryptJson(
-                                generateTGSObject(clientId, clientSSKey),
+                                generateTGSObject(clientId, clientSSKey, ticketEstimate),
                                 stringToLong(Settings.TGS_SS_KEY)
                         )
                 )
         );
-        tgsResponseObject.put("cliest_ss_key", clientSSKey);
+        tgsResponseObject.put("client_ss_key", clientSSKey);
         return tgsResponseObject;
     }
 
@@ -66,10 +65,7 @@ public class TGSServerHandler implements HttpHandler {
         }
 
         try(InputStreamReader inputStreamReader = new InputStreamReader(exchange.getRequestBody());
-            OutputStream outputStream = exchange.getResponseBody();
-            Connection connection = DriverManager.getConnection(Settings.DB_HOST,
-                    Settings.DB_USERNAME,
-                    Settings.DB_PASSWORD)) {
+            OutputStream outputStream = exchange.getResponseBody()) {
 
             byte[] requestData = Base64.decodeBase64(IOUtils.toByteArray(inputStreamReader));
 
@@ -104,7 +100,7 @@ public class TGSServerHandler implements HttpHandler {
 
             exchange.sendResponseHeaders(200, responseB64Data.length);
             outputStream.write(responseB64Data);
-        } catch (ParseException | SQLException e) {
+        } catch (ParseException e) {
             writeError(exchange, "Internal Server Error", 500);
             e.printStackTrace();
         } catch (HttpException e) {

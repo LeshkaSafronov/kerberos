@@ -10,6 +10,7 @@ public class KerberosServer {
 
         server.createContext("/auth", new AuthServerHandler());
         server.createContext("/tgs", new TGSServerHandler());
+        server.createContext("/ss", new SSServerHandler());
 
         server.setExecutor(null);
         server.start();
